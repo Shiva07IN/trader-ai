@@ -61,3 +61,18 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     timeout = setTimeout(() => fn(...args), delay);
   };
 }
+
+/** Format a date string as relative time: "2 hours ago" */
+export function formatTimeAgo(dateStr: string | undefined): string {
+  if (!dateStr) return "";
+  try {
+    const date = new Date(dateStr);
+    const diff = Date.now() - date.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  } catch { return ""; }
+}

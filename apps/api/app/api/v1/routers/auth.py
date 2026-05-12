@@ -160,3 +160,40 @@ async def get_me(
         is_verified=user.is_verified,
         created_at=user.created_at.isoformat(),
     )
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    body: dict,
+    user_id: str = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user's profile preferences."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if "name" in body and body["name"]:
+        user.name = body["name"]
+    if "risk_tolerance" in body:
+        user.risk_tolerance = body["risk_tolerance"]
+    if "investment_horizon" in body:
+        user.investment_horizon = body["investment_horizon"]
+    if "preferred_sectors" in body:
+        user.preferred_sectors = body["preferred_sectors"]
+
+    await db.flush()
+    logger.info("User %s updated profile", user_id)
+
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        subscription_tier=user.subscription_tier,
+        risk_tolerance=user.risk_tolerance,
+        investment_horizon=user.investment_horizon,
+        is_verified=user.is_verified,
+        created_at=user.created_at.isoformat(),
+    )

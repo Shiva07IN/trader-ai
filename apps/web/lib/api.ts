@@ -73,6 +73,9 @@ export const api = {
 
     me: (token: string) =>
       request("/auth/me", { token }),
+
+    updateMe: (data: object, token: string) =>
+      request("/auth/me", { method: "PATCH", body: JSON.stringify(data), token }),
   },
 
   // ── Stocks ────────────────────────────────────────────────────────────────
@@ -144,5 +147,17 @@ export const api = {
 
     remove: (symbol: string, token: string) =>
       request(`/watchlist/remove/${symbol}`, { method: "DELETE", token }),
+  },
+
+  // ── Screener ────────────────────────────────────────────────────────────────
+  screener: {
+    screen: (queryString: string) =>
+      fetch(`${API_BASE}/screener?${queryString}`).then((r) => r.json()),
+  },
+
+  // ── News ──────────────────────────────────────────────────────────────────
+  news: {
+    get: (params?: string) =>
+      request(`/news${params ? "?" + params : ""}`),
   },
 };
