@@ -1,0 +1,88 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# Dockerfile.render  —  Production-optimised for Render (free/starter plan)
+# Optimisations:
+#   • Multi-stage build  → minimal final image (~200MB vs ~800MB)
+#   • pip wheel cache    → fast layer cache on re-deploy
+#   • Non-root user      → security
+#   • Gunicorn + Uvicorn workers → production-grade ASGI serving
+#   • Minimal apt deps   → faster cold-start on Render
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ── Stage 1: Build wheels ─────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# System build deps (only needed at build time)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip + install wheel builder
+RUN pip install --upgrade pip wheel
+
+# Copy only requirements first for cache efficiency
+COPY requirements.txt .
+
+# Build all wheels into /wheels
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
+
+
+# ── Stage 2: Runtime image ────────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+# Labels for Render
+LABEL org.opencontainers.image.title="TraderAI API"
+LABEL org.opencontainers.image.description="AI-powered Indian stock market intelligence platform"
+LABEL org.opencontainers.image.source="https://github.com/Shiva07IN/trader-ai"
+
+WORKDIR /app
+
+# Runtime-only system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install from pre-built wheels (fast — no compilation)
+COPY --from=builder /wheels /wheels
+COPY requirements.txt .
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
+    && pip install --no-cache-dir gunicorn==23.0.0 \
+    && rm -rf /wheels
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+    && chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose Render's expected port
+EXPOSE 10000
+
+# Health check (Render also performs its own via healthCheckPath)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
+
+# ── Production startup via Gunicorn + Uvicorn workers ─────────────────────────
+# - 2 workers  = good for Render starter (512MB RAM)
+# - --timeout 120  = allow slow yfinance fetches
+# - --keep-alive 5 = connection reuse
+# - --access-logfile -  = stdout logging (Render captures this)
+CMD gunicorn app.main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 2 \
+    --bind 0.0.0.0:${PORT:-10000} \
+    --timeout 120 \
+    --keep-alive 5 \
+    --max-requests 500 \
+    --max-requests-jitter 50 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info \
+    --preload

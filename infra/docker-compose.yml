@@ -1,7 +1,12 @@
 version: "3.9"
 
+# ════════════════════════════════════════════════════════════════════════════════
+# docker-compose.yml  —  Local development only
+# Production runs on: Render (API) + Supabase (DB) + Upstash (Redis) + Vercel (Web)
+# ════════════════════════════════════════════════════════════════════════════════
+
 services:
-  # ─── PostgreSQL ───────────────────────────────────────────────────────────────
+  # ── PostgreSQL (local dev — mirrors Supabase schema) ──────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: traderai_postgres
@@ -21,12 +26,17 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis ────────────────────────────────────────────────────────────────────
+  # ── Redis (local dev — mirrors Upstash behavior) ───────────────────────────
   redis:
     image: redis:7-alpine
     container_name: traderai_redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_secret} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-redis_secret}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1
     ports:
       - "6379:6379"
     volumes:
@@ -37,7 +47,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── ChromaDB (Vector Store) ──────────────────────────────────────────────────
+  # ── ChromaDB (local dev vector store) ─────────────────────────────────────
   chromadb:
     image: chromadb/chroma:latest
     container_name: traderai_chromadb
@@ -48,12 +58,13 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       - ANONYMIZED_TELEMETRY=false
+      - IS_PERSISTENT=true
 
-  # ─── FastAPI Backend ──────────────────────────────────────────────────────────
+  # ── FastAPI Backend (dev mode — hot reload) ────────────────────────────────
   api:
     build:
       context: ../apps/api
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile         # Use local dev Dockerfile (not Dockerfile.render)
     container_name: traderai_api
     restart: unless-stopped
     ports:
@@ -62,19 +73,23 @@ services:
       - ../.env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-traderai}:${POSTGRES_PASSWORD:-traderai_secret}@postgres:5432/${POSTGRES_DB:-traderai_db}
+      - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-traderai}:${POSTGRES_PASSWORD:-traderai_secret}@postgres:5432/${POSTGRES_DB:-traderai_db}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/2
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
+      - ENVIRONMENT=development
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ../apps/api:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ../apps/api:/app      # Mount for hot-reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level info
 
-  # ─── Celery Worker ────────────────────────────────────────────────────────────
+  # ── Celery Worker (dev) ────────────────────────────────────────────────────
   celery_worker:
     build:
       context: ../apps/api
@@ -86,6 +101,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-traderai}:${POSTGRES_PASSWORD:-traderai_secret}@postgres:5432/${POSTGRES_DB:-traderai_db}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/2
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
     depends_on:
@@ -95,7 +112,7 @@ services:
       - ../apps/api:/app
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 -Q ai_tasks,market_tasks
 
-  # ─── Celery Beat (Scheduler) ──────────────────────────────────────────────────
+  # ── Celery Beat Scheduler (dev) ────────────────────────────────────────────
   celery_beat:
     build:
       context: ../apps/api
@@ -107,11 +124,30 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-traderai}:${POSTGRES_PASSWORD:-traderai_secret}@postgres:5432/${POSTGRES_DB:-traderai_db}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/2
     depends_on:
       - redis
     volumes:
       - ../apps/api:/app
-    command: celery -A app.workers.celery_app beat --loglevel=info
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  # ── Flower: Celery monitoring UI ───────────────────────────────────────────
+  flower:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: traderai_flower
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    env_file:
+      - ../.env
+    environment:
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-redis_secret}@redis:6379/1
+    depends_on:
+      - redis
+    command: celery -A app.workers.celery_app flower --port=5555 --basic_auth=admin:flowerpass
 
 volumes:
   postgres_data:

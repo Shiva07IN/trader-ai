@@ -1,0 +1,69 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# .dockerignore  —  Keeps Docker build context lean (faster Render deploys)
+# ════════════════════════════════════════════════════════════════════════════════
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.Python
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual envs
+venv/
+.venv/
+env/
+ENV/
+.env.local
+
+# Testing
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+
+# Migrations (keep only if you run them in start command)
+# migrations/versions/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Chroma data (use cloud in production)
+chroma_data/
+chromadb_data/
+
+# Large model files
+*.bin
+*.pkl
+*.h5
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docs
+docs/
+*.md
+README*
+
+# CI
+.github/

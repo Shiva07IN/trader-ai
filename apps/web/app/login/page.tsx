@@ -1,156 +1,152 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { TrendingUp, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
-
-const schema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
-});
-
-type FormData = z.infer<typeof schema>;
+import Link from "next/link";
+import { TrendingUp, Eye, EyeOff, Zap } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [showPwd, setShowPwd] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
-
-  const onSubmit = async (data: FormData) => {
-    setError(null);
-    setLoading(true);
-    const result = await signIn("credentials", {
-      redirect: false,
-      email: data.email,
-      password: data.password,
-    });
-    setLoading(false);
-    if (result?.error) {
-      setError("Invalid email or password");
-    } else {
-      router.push("/dashboard");
-    }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true); setError("");
+    const res = await signIn("credentials", { email, password, redirect: false });
+    if (res?.ok) router.push("/dashboard");
+    else { setError("Invalid email or password."); setLoading(false); }
   };
 
-  const signInGoogle = () => signIn("google", { callbackUrl: "/dashboard" });
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-hero-gradient pointer-events-none" />
+    <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "1fr 1fr", background: "var(--bg-base)" }}>
 
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-md"
-      >
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2.5 mb-6">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-glow">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-white">
-              Trader<span className="text-gradient">AI</span>
-            </span>
-          </Link>
-          <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-          <p className="text-slate-500 text-sm mt-1">Sign in to your account</p>
+      {/* ── Left Panel ───────────────────────────────────────────── */}
+      <div style={{ background: "var(--bg-surface)", borderRight: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 48, position: "relative", overflow: "hidden" }}>
+        {/* Brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "linear-gradient(135deg,#4F46E5,#7C3AED)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <TrendingUp size={18} color="#fff" />
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em" }}>
+            Trader<span style={{ color: "var(--primary-dim)" }}>AI</span>
+          </span>
         </div>
 
-        <div className="glass-card gradient-border p-8 space-y-6">
-          {/* Google Sign In */}
+        {/* Dashboard preview card */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", paddingBlock: 48 }}>
+          <div style={{ width: "100%", maxWidth: 380 }}>
+            <div className="card-ai" style={{ padding: 20, marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <Zap size={14} color="var(--primary-dim)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--primary-dim)", letterSpacing: "0.06em", textTransform: "uppercase" }}>AI Insight</span>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 14 }}>
+                AI detects bullish divergence on hourly MACD. High probability setup for IT sector breakout.
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                {[{ sym: "INFY", pct: "+2.1%", up: true }, { sym: "TCS", pct: "+1.4%", up: true }, { sym: "WIPRO", pct: "-0.8%", up: false }].map(s => (
+                  <div key={s.sym} style={{ flex: 1, background: "var(--bg-elevated)", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{s.sym}</div>
+                    <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, color: s.up ? "var(--success)" : "var(--danger)", fontWeight: 600 }}>{s.pct}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Stat mini cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[{ label: "NIFTY 50", val: "22,456", chg: "+0.80%" }, { label: "SENSEX", val: "73,852", chg: "+0.77%" }].map(s => (
+                <div key={s.label} className="stat-card" style={{ padding: "12px 14px" }}>
+                  <div className="stat-label" style={{ fontSize: 9 }}>{s.label}</div>
+                  <div style={{ fontFamily: "JetBrains Mono", fontSize: 15, fontWeight: 700, marginTop: 4 }}>{s.val}</div>
+                  <div className="pnl-badge pnl-up" style={{ marginTop: 6, fontSize: 10 }}>{s.chg}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Testimonial */}
+        <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 24 }}>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.7, fontStyle: "italic", marginBottom: 14 }}>
+            "TraderAI transformed how I research stocks. The institutional-grade data paired with AI insights saves me hours daily."
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg,#4F46E5,#7C3AED)" }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Arjun Sharma</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>CFA, Equity Analyst</div>
+            </div>
+          </div>
+        </div>
+
+        {/* BG radial */}
+        <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(79,70,229,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
+      </div>
+
+      {/* ── Right Panel — Form ────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 48 }}>
+        <div style={{ width: "100%", maxWidth: 420 }}>
+          <div style={{ marginBottom: 36 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Welcome back</h1>
+            <p style={{ fontSize: 14, color: "var(--text-muted)" }}>Sign in to your TraderAI account</p>
+          </div>
+
+          {/* Google */}
           <button
-            onClick={signInGoogle}
-            className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all text-sm font-medium text-white"
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#111", border: "none", borderRadius: 8, height: 44, fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 20, transition: "opacity 150ms" }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = "0.9")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
             Continue with Google
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-xs text-slate-600">or continue with email</span>
-            <div className="flex-1 h-px bg-white/5" />
+          {/* Divider */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+            <span style={{ fontSize: 11, color: "var(--text-disabled)", fontWeight: 600 }}>OR</span>
+            <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+            <div style={{ background: "var(--danger-muted)", border: "1px solid rgba(255,117,117,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--danger)", marginBottom: 16 }}>
+              {error}
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label className="text-xs font-medium text-slate-400 block mb-1.5">Email</label>
-              <input
-                type="email"
-                {...register("email")}
-                className="input-field"
-                placeholder="you@example.com"
-              />
-              {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>}
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>Email</label>
+              <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-slate-400">Password</label>
-                <Link href="#" className="text-xs text-indigo-400 hover:text-indigo-300">Forgot password?</Link>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Password</label>
+                <Link href="/forgot-password" style={{ fontSize: 12, color: "var(--primary-dim)", textDecoration: "none" }}>Forgot password?</Link>
               </div>
-              <div className="relative">
-                <input
-                  type={showPwd ? "text" : "password"}
-                  {...register("password")}
-                  className="input-field pr-10"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd(!showPwd)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                >
-                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <div style={{ position: "relative" }}>
+                <input className="input" type={showPw ? "text" : "password"} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} style={{ paddingRight: 44 }} required />
+                <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 0 }}>
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : <LogIn className="w-4 h-4" />}
+            <button type="submit" className="btn btn-primary" style={{ height: 44, marginTop: 4 }} disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="text-center text-sm text-slate-500">
+          <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "var(--text-muted)" }}>
             Don't have an account?{" "}
-            <Link href="/register" className="text-indigo-400 hover:text-indigo-300 font-medium">
-              Create one free
-            </Link>
+            <Link href="/register" style={{ color: "var(--primary-dim)", textDecoration: "none", fontWeight: 600 }}>Sign up →</Link>
           </p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

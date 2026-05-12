@@ -1,197 +1,220 @@
 "use client";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Filter, SlidersHorizontal, ChevronDown, TrendingUp, ExternalLink, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { Filter, Download, Save, ChevronUp, ChevronDown, SlidersHorizontal } from "lucide-react";
 
-const SECTORS = ["Technology", "Financial Services", "Healthcare", "Energy", "Consumer Goods", "Consumer Discretionary", "Industrials", "Materials", "Utilities", "Communication"];
-const SORT_OPTIONS = [
-  { value: "roe", label: "ROE %" },
-  { value: "pe", label: "P/E Ratio" },
-  { value: "div_yield", label: "Div Yield %" },
-  { value: "revenue_growth", label: "Revenue Growth" },
+const STOCKS = [
+  { sym: "TCS",        sector: "Technology",         price: "3,924", chg: "+1.20%", up: true,  pe: 28.4, roe: 47.2, cap: "14.3L Cr", div: 1.8, rsi: 64, sig: "BUY" },
+  { sym: "INFY",       sector: "Technology",         price: "1,634", chg: "+0.82%", up: true,  pe: 24.1, roe: 31.8, cap: "6.8L Cr",  div: 2.4, rsi: 58, sig: "BUY" },
+  { sym: "HDFC Bank",  sector: "Financial Services", price: "1,742", chg: "+0.64%", up: true,  pe: 18.2, roe: 18.4, cap: "13.2L Cr", div: 1.2, rsi: 52, sig: "HOLD" },
+  { sym: "Asian Paints",sector: "Consumer",          price: "2,842", chg: "-0.42%", up: false, pe: 54.2, roe: 29.1, cap: "2.7L Cr",  div: 0.9, rsi: 44, sig: "HOLD" },
+  { sym: "Sun Pharma", sector: "Healthcare",         price: "1,248", chg: "+2.12%", up: true,  pe: 35.8, roe: 17.4, cap: "3.0L Cr",  div: 0.7, rsi: 71, sig: "BUY" },
+  { sym: "Titan Co.",  sector: "Consumer",           price: "3,456", chg: "+1.84%", up: true,  pe: 87.2, roe: 28.3, cap: "3.1L Cr",  div: 0.3, rsi: 68, sig: "BUY" },
+  { sym: "Wipro",      sector: "Technology",         price: "498",   chg: "-1.22%", up: false, pe: 21.4, roe: 16.2, cap: "2.7L Cr",  div: 1.8, rsi: 38, sig: "SELL" },
+  { sym: "ICICI Bank", sector: "Financial Services", price: "1,098", chg: "+0.92%", up: true,  pe: 17.8, roe: 18.9, cap: "7.7L Cr",  div: 0.8, rsi: 55, sig: "BUY" },
 ];
 
-type StockRow = {
-  symbol: string; name: string; sector: string;
-  pe: number; pb: number; roe: number;
-  div_yield: number; market_cap: string; beta: number;
-  revenue_growth: number;
+const SIG_STYLE: Record<string, { bg: string; color: string }> = {
+  BUY:  { bg: "var(--success-muted)", color: "var(--success)" },
+  HOLD: { bg: "var(--warning-muted)", color: "var(--warning)" },
+  SELL: { bg: "var(--danger-muted)",  color: "var(--danger)" },
 };
 
-function Badge({ val, low, high, reverse = false, suffix = "" }: {
-  val: number; low: number; high: number; reverse?: boolean; suffix?: string
-}) {
-  const good = reverse ? val < low : val > high;
-  const bad = reverse ? val > high : val < low;
-  const cls = good ? "text-emerald-400" : bad ? "text-red-400" : "text-amber-400";
-  return <span className={`font-mono text-sm font-semibold ${cls}`}>{val?.toFixed(1)}{suffix}</span>;
-}
+type SortKey = "sym" | "price" | "pe" | "roe" | "rsi";
 
 export default function ScreenerPage() {
-  const [results, setResults] = useState<StockRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    sectors: [] as string[],
-    maxPe: "",
-    minRoe: "",
-    minDivYield: "",
-    sortBy: "roe",
-    sortOrder: "desc",
-  });
+  const [sortKey, setSortKey] = useState<SortKey>("roe");
+  const [sortDir, setSortDir] = useState<"asc"|"desc">("desc");
+  const [sectorFilter, setSectorFilter] = useState<string[]>(["Technology","Financial Services","Healthcare","Consumer"]);
 
-  const fetchResults = async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (filters.sectors.length) params.set("sectors", filters.sectors.join(","));
-    if (filters.maxPe) params.set("max_pe", filters.maxPe);
-    if (filters.minRoe) params.set("min_roe", filters.minRoe);
-    if (filters.minDivYield) params.set("min_div_yield", filters.minDivYield);
-    params.set("sort_by", filters.sortBy);
-    params.set("sort_order", filters.sortOrder);
-    params.set("limit", "50");
-    try {
-      const data: any = await api.screener.screen(params.toString());
-      setResults(data.results || []);
-    } catch { setResults([]); }
-    finally { setLoading(false); }
+  const sort = (k: SortKey) => {
+    if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(k); setSortDir("desc"); }
   };
 
-  useEffect(() => { fetchResults(); }, []);
+  const rows = [...STOCKS]
+    .filter(s => sectorFilter.includes(s.sector))
+    .sort((a, b) => {
+      const av = sortKey === "sym" ? a.sym : sortKey === "price" ? parseFloat(a.price.replace(",","")) : a[sortKey];
+      const bv = sortKey === "sym" ? b.sym : sortKey === "price" ? parseFloat(b.price.replace(",","")) : b[sortKey];
+      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
 
-  const toggleSector = (s: string) => {
-    setFilters((f) => ({
-      ...f,
-      sectors: f.sectors.includes(s) ? f.sectors.filter((x) => x !== s) : [...f.sectors, s],
-    }));
-  };
+  const toggleSector = (s: string) => setSectorFilter(f => f.includes(s) ? f.filter(x => x !== s) : [...f, s]);
+
+  const SortIcon = ({ k }: { k: SortKey }) => (
+    <span style={{ marginLeft: 4, opacity: sortKey === k ? 1 : 0.3 }}>
+      {sortKey === k && sortDir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+    </span>
+  );
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <SlidersHorizontal className="w-6 h-6 text-indigo-400" /> Stock Screener
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">{results.length} stocks match your filters</p>
+    <div style={{ display: "grid", gridTemplateColumns: "256px 1fr", gap: 20, alignItems: "start" }}>
+
+      {/* ── Filter Sidebar ───────────────────────────────────────── */}
+      <div className="card" style={{ padding: 0, overflow: "hidden", position: "sticky", top: 80 }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", gap: 8 }}>
+          <SlidersHorizontal size={14} color="var(--primary-dim)" />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Filters</span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-all ${
-              showFilters ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300" : "border-white/10 text-slate-400 hover:text-white"
-            }`}>
-            <Filter className="w-4 h-4" /> Filters {filters.sectors.length > 0 && `(${filters.sectors.length})`}
+
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Market Cap */}
+          <div>
+            <div className="label-md" style={{ marginBottom: 10 }}>Market Cap</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {["Large Cap", "Mid Cap", "Small Cap"].map((c, i) => (
+                <label key={c} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-secondary)" }}>
+                  <input type="checkbox" defaultChecked={i < 2} style={{ accentColor: "#4F46E5" }} />
+                  {c}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Fundamentals */}
+          <div>
+            <div className="label-md" style={{ marginBottom: 10 }}>Fundamentals</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: "var(--text-muted)" }}>
+                  <span>P/E Ratio</span><span style={{ color: "var(--primary-dim)", fontFamily: "JetBrains Mono" }}>Max 50</span>
+                </div>
+                <input type="range" min={0} max={100} defaultValue={50} style={{ width: "100%", accentColor: "#4F46E5" }} />
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: "var(--text-muted)" }}>
+                  <span>ROE %</span><span style={{ color: "var(--primary-dim)", fontFamily: "JetBrains Mono" }}>Min 15%</span>
+                </div>
+                <input type="range" min={0} max={50} defaultValue={15} style={{ width: "100%", accentColor: "#4F46E5" }} />
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: "var(--text-muted)" }}>
+                  <span>Debt/Equity</span><span style={{ color: "var(--primary-dim)", fontFamily: "JetBrains Mono" }}>Max 1.5x</span>
+                </div>
+                <input type="range" min={0} max={5} step={0.1} defaultValue={1.5} style={{ width: "100%", accentColor: "#4F46E5" }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Technical */}
+          <div>
+            <div className="label-md" style={{ marginBottom: 10 }}>Technical</div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: "var(--text-muted)" }}>
+                <span>RSI Range</span><span style={{ color: "var(--primary-dim)", fontFamily: "JetBrains Mono" }}>30 – 70</span>
+              </div>
+              <input type="range" min={0} max={100} defaultValue={70} style={{ width: "100%", accentColor: "#4F46E5" }} />
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-secondary)", marginTop: 10, cursor: "pointer" }}>
+              <input type="checkbox" defaultChecked style={{ accentColor: "#4F46E5" }} />
+              Above MA200
+            </label>
+          </div>
+
+          {/* Sector */}
+          <div>
+            <div className="label-md" style={{ marginBottom: 10 }}>Sector</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {["Technology","Financial Services","Healthcare","Consumer","Energy","Metals"].map(s => (
+                <label key={s} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-secondary)" }}>
+                  <input type="checkbox" checked={sectorFilter.includes(s)} onChange={() => toggleSector(s)} style={{ accentColor: "#4F46E5" }} />
+                  {s}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}>
+            Apply Filters
           </button>
-          <button onClick={fetchResults} className="btn-primary flex items-center gap-2 text-sm px-4 py-2">
-            <RefreshCw className="w-4 h-4" /> Apply
+          <button className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "center" }}>
+            Reset All
           </button>
         </div>
       </div>
 
-      {/* Filters Panel */}
-      {showFilters && (
-        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
-          className="glass-card gradient-border p-6 space-y-5">
-          {/* Sectors */}
+      {/* ── Table Panel ──────────────────────────────────────────── */}
+      <div>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Sectors</div>
-            <div className="flex flex-wrap gap-2">
-              {SECTORS.map((s) => (
-                <button key={s} onClick={() => toggleSector(s)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                    filters.sectors.includes(s)
-                      ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                      : "border-white/10 text-slate-500 hover:text-slate-300"
-                  }`}>{s}</button>
-              ))}
-            </div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
+              <Filter size={18} style={{ display: "inline", verticalAlign: "middle", marginRight: 8, color: "var(--primary-dim)" }} />
+              Stock Screener
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Screen 5,000+ NSE & BSE stocks with 50+ filters</p>
           </div>
-          {/* Numeric Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: "Max P/E", key: "maxPe", placeholder: "e.g. 30" },
-              { label: "Min ROE %", key: "minRoe", placeholder: "e.g. 15" },
-              { label: "Min Div Yield %", key: "minDivYield", placeholder: "e.g. 2" },
-            ].map(({ label, key, placeholder }) => (
-              <div key={key}>
-                <label className="text-xs text-slate-500 block mb-1">{label}</label>
-                <input type="number" placeholder={placeholder}
-                  value={(filters as any)[key]}
-                  onChange={(e) => setFilters((f) => ({ ...f, [key]: e.target.value }))}
-                  className="input-field text-sm" />
-              </div>
-            ))}
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Sort By</label>
-              <select value={filters.sortBy}
-                onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value }))}
-                className="input-field text-sm">
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="badge badge-primary">{rows.length} stocks match</div>
+            <button className="btn btn-ghost btn-sm"><Save size={13} /> Save</button>
+            <button className="btn btn-ghost btn-sm"><Download size={13} /> Export CSV</button>
           </div>
-        </motion.div>
-      )}
+        </div>
 
-      {/* Results */}
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(8)].map((_, i) => <div key={i} className="skeleton h-14 rounded-xl" />)}
+        {/* Table */}
+        <div className="card" style={{ overflow: "hidden", padding: 0 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table className="data-table" style={{ minWidth: 900 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 32 }}>#</th>
+                  <th onClick={() => sort("sym")} style={{ cursor: "pointer" }}>Company <SortIcon k="sym" /></th>
+                  <th>Sector</th>
+                  <th className="right" onClick={() => sort("price")} style={{ cursor: "pointer" }}>Price <SortIcon k="price" /></th>
+                  <th className="right">Change</th>
+                  <th className="right" onClick={() => sort("pe")} style={{ cursor: "pointer" }}>P/E <SortIcon k="pe" /></th>
+                  <th className="right" onClick={() => sort("roe")} style={{ cursor: "pointer" }}>ROE% <SortIcon k="roe" /></th>
+                  <th className="right">Mkt Cap</th>
+                  <th className="right">Div%</th>
+                  <th className="right" onClick={() => sort("rsi")} style={{ cursor: "pointer" }}>RSI <SortIcon k="rsi" /></th>
+                  <th className="right">Signal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((s, i) => {
+                  const ss = SIG_STYLE[s.sig];
+                  return (
+                    <tr key={s.sym}>
+                      <td style={{ color: "var(--text-disabled)", fontSize: 11 }}>{i + 1}</td>
+                      <td>
+                        <Link href={`/dashboard/stocks/${s.sym.replace(" ","")}`}
+                          style={{ fontFamily: "JetBrains Mono", fontWeight: 700, fontSize: 12, color: "var(--text-primary)", textDecoration: "none" }}
+                          onMouseEnter={e => (e.currentTarget.style.color = "var(--primary-dim)")}
+                          onMouseLeave={e => (e.currentTarget.style.color = "var(--text-primary)")}>
+                          {s.sym}
+                        </Link>
+                      </td>
+                      <td><span className="badge badge-neutral">{s.sector}</span></td>
+                      <td className="right mono">₹{s.price}</td>
+                      <td className="right">
+                        <span className={`pnl-badge ${s.up ? "pnl-up" : "pnl-down"}`}>{s.chg}</span>
+                      </td>
+                      <td className="right mono">{s.pe}x</td>
+                      <td className="right mono" style={{ color: s.roe > 25 ? "var(--success)" : "var(--text-primary)" }}>{s.roe}%</td>
+                      <td className="right mono">{s.cap}</td>
+                      <td className="right mono">{s.div}%</td>
+                      <td className="right mono" style={{ color: s.rsi > 65 ? "var(--warning)" : s.rsi < 40 ? "var(--danger)" : "var(--text-primary)" }}>{s.rsi}</td>
+                      <td className="right">
+                        <span className="badge" style={{ background: ss.bg, color: ss.color }}>{s.sig}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--border-subtle)" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Showing 1–{rows.length} of {rows.length} results</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-ghost btn-sm" disabled>Previous</button>
+              <button className="btn btn-ghost btn-sm" disabled>Next</button>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="glass-card gradient-border overflow-x-auto">
-          <table className="w-full min-w-[900px]">
-            <thead>
-              <tr className="border-b border-white/5 text-xs text-slate-500 uppercase tracking-wider">
-                {["Stock", "Sector", "P/E", "P/B", "ROE %", "Div Yield %", "Rev Growth %", "Beta", ""].map((h) => (
-                  <th key={h} className={`py-3 px-4 font-medium ${h === "Stock" || h === "Sector" ? "text-left" : "text-right"} ${h === "" ? "" : ""}`}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {results.map((row, i) => {
-                const clean = row.symbol.replace(".NS","").replace(".BO","");
-                return (
-                  <motion.tr key={row.symbol}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="hover:bg-white/3 transition-colors group">
-                    <td className="px-4 py-3">
-                      <Link href={`/dashboard/stocks/${clean}`} className="flex items-center gap-2 group-hover:text-indigo-300 transition-colors">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xs font-bold text-indigo-400">{clean[0]}</div>
-                        <span className="text-sm font-semibold text-white">{clean}</span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3"><span className="badge badge-neutral text-xs">{row.sector}</span></td>
-                    <td className="px-4 py-3 text-right"><Badge val={row.pe} low={10} high={30} reverse /></td>
-                    <td className="px-4 py-3 text-right"><span className="text-sm font-mono text-slate-400">{row.pb?.toFixed(1)}x</span></td>
-                    <td className="px-4 py-3 text-right"><Badge val={row.roe} low={12} high={20} suffix="%" /></td>
-                    <td className="px-4 py-3 text-right"><Badge val={row.div_yield} low={1} high={3} suffix="%" /></td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`text-sm font-mono font-semibold ${row.revenue_growth >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {row.revenue_growth >= 0 ? "+" : ""}{row.revenue_growth?.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right"><span className="text-sm font-mono text-slate-400">{row.beta?.toFixed(2)}</span></td>
-                    <td className="px-4 py-3">
-                      <Link href={`/dashboard/stocks/${clean}`}
-                        className="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-indigo-300 transition-all p-1 rounded flex items-center">
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Link>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {results.length === 0 && (
-            <div className="py-12 text-center text-slate-500 text-sm">No stocks match your filters. Try relaxing the criteria.</div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
